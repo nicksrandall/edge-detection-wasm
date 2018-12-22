@@ -32,13 +32,7 @@ pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32) -> Clamped<Vec<u8>
 
     let image = image::DynamicImage::ImageRgba8(source_buf.clone()).to_luma();
 
-    edge::canny(
-        image,
-        &mut source_buf,
-        1.2,
-        0.4,  // strong threshold
-        0.05, // weak threshold
-    );
+    edge::canny(&image, &mut source_buf, 100.0, 150.0);
 
     Clamped(source_buf.to_vec())
 }
