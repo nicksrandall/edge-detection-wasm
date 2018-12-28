@@ -1,16 +1,10 @@
 //! Functions for detecting edges in images.
 
-// use crate::definitions::{HasBlack, HasWhite};
-// use crate::filter::gaussian_blur_f32;
 use image::{GenericImageView, GrayImage, ImageBuffer, Luma, Rgba};
 use imageproc::gradients::{horizontal_sobel, vertical_sobel};
-use js_sys::Math;
 use std::f32;
 
 /// Runs the canny edge detection algorithm.
-///
-/// Returns a binary image where edge pixels have a value of 255
-///  and non-edge pixels a value of 0.
 ///
 /// # Params
 ///
@@ -33,10 +27,11 @@ pub fn canny(
     src_buf: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     low_threshold: f32,
     high_threshold: f32,
+    count: u32,
 ) {
     assert!(high_threshold >= low_threshold);
     // Heavily based on the implementation proposed by wikipedia.
-    // 1. Gaussian blur.
+    // 1. Gaussian blur.(we don't do this step to boost speed).
     // const SIGMA: f32 = 1.4;
     // let blurred = gaussian_blur_f32(image, SIGMA);
 
@@ -46,7 +41,7 @@ pub fn canny(
     let g: Vec<f32> = gx
         .iter()
         .zip(gy.iter())
-        .map(|(h, v)| Math::hypot(*h as f64, *v as f64) as f32)
+        .map(|(h, v)| (*h as f32).hypot(*v as f32))
         .collect::<Vec<f32>>();
 
     let g = ImageBuffer::from_raw(image.width(), image.height(), g).unwrap();
@@ -55,7 +50,7 @@ pub fn canny(
     let thinned = non_maximum_suppression(&g, &gx, &gy);
 
     // 4. Hysteresis to filter out edges based on thresholds.
-    hysteresis(&thinned, src_buf, low_threshold, high_threshold);
+    hysteresis(&thinned, src_buf, low_threshold, high_threshold, count);
 }
 
 /// Finds local maxima to make the edges thinner.
@@ -70,8 +65,7 @@ fn non_maximum_suppression(
         for x in 1..g.width() - 1 {
             let x_gradient = gx[(x, y)][0] as f32;
             let y_gradient = gy[(x, y)][0] as f32;
-            let mut angle =
-                Math::atan2(y_gradient as f64, x_gradient as f64) as f32 * RADIANS_TO_DEGREES;
+            let mut angle = (y_gradient).atan2(x_gradient) * RADIANS_TO_DEGREES;
             if angle < 0.0 {
                 angle += 180.0
             }
@@ -123,25 +117,28 @@ fn hysteresis(
     out: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     low_thresh: f32,
     high_thresh: f32,
+    hue: u32,
 ) {
-    let max_brightness = image::Rgba {
-        data: [255u8, 255u8, 255u8, 255u8],
+    let (r, g, b) = cubehelix_to_rgb(hue, 1.0, 0.58);
+    let pixel = image::Rgba {
+        data: [r, g, b, 255u8],
     };
-    // let min_brightness = image::Rgba {
-    //     data: [0u8, 0u8, 0u8, 255u8],
-    // };
     // Init output image as all black.
-    // let mut out = ImageBuffer::from_pixel(input.width(), input.height(), min_brightness);
+    let mut tracking = ImageBuffer::from_pixel(input.width(), input.height(), Luma { data: [0u8] });
     // Stack. Possible optimization: Use previously allocated memory, i.e. gx.
     let mut edges = Vec::with_capacity(((input.width() * input.height()) / 2) as usize);
     for y in 1..input.height() - 1 {
         for x in 1..input.width() - 1 {
             let inp_pix = *input.get_pixel(x, y);
-            let out_pix = *out.get_pixel(x, y);
+            let out_pix = *tracking.get_pixel(x, y);
             // If the edge strength is higher than high_thresh, mark it as an edge.
-            if inp_pix[0] >= high_thresh && out_pix[0] != 255 {
-                out.put_pixel(x, y, max_brightness);
+            if inp_pix[0] >= high_thresh && out_pix[0] == 0 {
+                tracking.put_pixel(x, y, Luma { data: [255u8] });
+                out.put_pixel(x, y, pixel);
+                out.put_pixel(x - 1, y, pixel);
+                out.put_pixel(x + 1, y, pixel);
                 edges.push((x, y));
+
                 // Track neighbors until no neighbor is >= low_thresh.
                 while !edges.is_empty() {
                     let (nx, ny) = edges.pop().unwrap();
@@ -156,9 +153,18 @@ fn hysteresis(
 
                     for neighbor_idx in &neighbor_indices {
                         let in_neighbor = *input.get_pixel(neighbor_idx.0, neighbor_idx.1);
-                        let out_neighbor = *out.get_pixel(neighbor_idx.0, neighbor_idx.1);
+                        let out_neighbor = *tracking.get_pixel(neighbor_idx.0, neighbor_idx.1);
                         if in_neighbor[0] >= low_thresh && out_neighbor[0] == 0 {
-                            out.put_pixel(neighbor_idx.0, neighbor_idx.1, max_brightness);
+                            tracking.put_pixel(
+                                neighbor_idx.0,
+                                neighbor_idx.1,
+                                Luma { data: [255u8] },
+                            );
+                            out.put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
+                            out.put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
+                            out.put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
+                            // out.put_pixel(neighbor_idx.0, neighbor_idx.1 - 1, pixel);
+                            // out.put_pixel(neighbor_idx.0, neighbor_idx.1 + 1, pixel);
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }
                     }
@@ -166,4 +172,35 @@ fn hysteresis(
             }
         }
     }
+}
+
+// Convert HSL to Cubehelix to RGB
+const A: f32 = -0.14861_f32;
+const B: f32 = 1.78277_f32;
+const C: f32 = -0.29227_f32;
+const D: f32 = -0.90649_f32;
+const E: f32 = 1.97294_f32;
+const PI: f32 = 3.14159265_f32;
+
+fn hex(v: f32) -> u8 {
+    if v <= 0.0 {
+        0_u8
+    } else if v >= 1.0 {
+        255_u8
+    } else {
+        (v * 255.0).floor() as u8
+    }
+}
+
+fn cubehelix_to_rgb(hue: u32, sat: f32, light: f32) -> (u8, u8, u8) {
+    let h = (hue as f32 + 120.0) * (PI / 180.0);
+    let l = light;
+    let a = sat * light * (1.0 - light);
+    let cosh = h.cos();
+    let sinh = h.sin();
+    return (
+        hex(l + a * (A * cosh + B * sinh)),
+        hex(l + a * (C * cosh + D * sinh)),
+        hex(l + a * (E * cosh)),
+    );
 }

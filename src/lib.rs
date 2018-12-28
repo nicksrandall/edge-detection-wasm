@@ -7,6 +7,7 @@ mod edge;
 mod utils;
 
 use cfg_if::cfg_if;
+use image::Pixel;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 
@@ -20,21 +21,22 @@ cfg_if! {
     }
 }
 
-// #[wasm_bindgen]
-// extern {
-//     fn alert(s: &str);
-// }
-
 #[wasm_bindgen]
-pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32) -> Clamped<Vec<u8>> {
-    let mut source_buf = image::RgbaImage::from_vec(width, height, buf.to_vec())
-        .expect("Could not load image from buf");
+pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, count: u32) -> Clamped<Vec<u8>> {
+    let buf_vec = buf.0;
 
-    let image = image::DynamicImage::ImageRgba8(source_buf.clone()).to_luma();
+    let mut source_buffer = image::RgbaImage::from_vec(width, height, buf_vec)
+        .expect("Could not load image from input buffer");
 
-    edge::canny(&image, &mut source_buf, 100.0, 150.0);
+    let mut gray_image = image::DynamicImage::new_luma8(width, height).to_luma();
 
-    Clamped(source_buf.to_vec())
+    for (x, y, p) in source_buffer.enumerate_pixels() {
+        gray_image.put_pixel(x, y, p.to_luma());
+    }
+
+    edge::canny(&gray_image, &mut source_buffer, 150.0, 300.0, count);
+
+    Clamped(source_buffer.into_raw())
 }
 
 #[cfg(test)]
@@ -48,7 +50,7 @@ mod tests {
         let width = img.width();
         let height = img.height();
         let raw = Clamped(img.to_rgba().into_raw());
-        let out = detect(raw, width, height);
+        let out = detect(raw, width, height, 1);
         let out_buf = image::RgbaImage::from_vec(width, height, out.to_vec())
             .expect("Could not load image from buf");
 
