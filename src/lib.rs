@@ -25,17 +25,24 @@ cfg_if! {
 pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, count: u32) -> Clamped<Vec<u8>> {
     let buf_vec = buf.0;
 
+    // create image from image buffer
     let mut source_buffer = image::RgbaImage::from_vec(width, height, buf_vec)
         .expect("Could not load image from input buffer");
 
-    let mut gray_image = image::DynamicImage::new_luma8(width, height).to_luma();
-
-    for (x, y, p) in source_buffer.enumerate_pixels() {
-        gray_image.put_pixel(x, y, p.to_luma());
+    // convert image buffer to grayscale (luma) buffer;
+    let mut gray_vec: Vec<u8> = Vec::with_capacity(width as usize * height as usize);
+    for p in source_buffer.pixels() {
+        gray_vec.push(p.to_luma().data[0]);
     }
 
+    // create gray image from gray image buffer
+    let gray_image = image::GrayImage::from_vec(width, height, gray_vec)
+        .expect("Could not load image from input buffer");
+
+    // create gray image from gray image buffer
     edge::canny(&gray_image, &mut source_buffer, 150.0, 300.0, count);
 
+    // clamp results for canvas
     Clamped(source_buffer.into_raw())
 }
 
@@ -56,6 +63,6 @@ mod tests {
 
         out_buf.save("test.jpeg").expect("Could not save test file");
 
-        assert!(true);
+        assert!(true); // TODO: write real tests
     }
 }

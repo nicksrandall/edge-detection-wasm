@@ -10,10 +10,9 @@ let count = 0;
 function tick() {
   ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const start = performance.now();
+  console.time('edge::detect');
   const data = wasm.detect(imageData.data, canvas.width, canvas.height, count);
-  const end = performance.now();
-  console.log(`detect took ${end - start}ms`);
+  console.timeEnd('edge::detect');
   ctx.putImageData(new ImageData(data, canvas.width, canvas.height), 0, 0);
   count++;
   window.requestAnimationFrame(tick);

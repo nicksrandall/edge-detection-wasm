@@ -29,7 +29,6 @@ pub fn canny(
     high_threshold: f32,
     count: u32,
 ) {
-    assert!(high_threshold >= low_threshold);
     // Heavily based on the implementation proposed by wikipedia.
     // 1. Gaussian blur.(we don't do this step to boost speed).
     // const SIGMA: f32 = 1.4;
@@ -60,6 +59,7 @@ fn non_maximum_suppression(
     gy: &ImageBuffer<Luma<i16>, Vec<i16>>,
 ) -> ImageBuffer<Luma<f32>, Vec<f32>> {
     const RADIANS_TO_DEGREES: f32 = 180f32 / f32::consts::PI;
+    // TODO: maybe reuse this memory to decrease allocations?
     let mut out = ImageBuffer::from_pixel(g.width(), g.height(), Luma { data: [0.0] });
     for y in 1..g.height() - 1 {
         for x in 1..g.width() - 1 {
