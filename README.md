@@ -1,42 +1,14 @@
 <meta charset="utf-8"/>
 
 # Edge-Detection-Wasm
-Most of this code is copy pasted from `https://github.com/polyfloyd/edge-detection-rs`
+This is a simple rust library that is compiled down to WebAssembly using `wasm-pack`. 
+The exported function (`detect`) takes in a pixel buffer in the form of a `ClampedUint8Array`
+and outputs a new pixel buffer that has all the detected "edges" in that image highlighted 
+with a random color (follows cubehelix color space for effect).
 
-## 🦀🕸️ `wasm-pack-template`
-
-A template for kick starting a Rust and WebAssembly project using
-[`wasm-pack`](https://github.com/rustwasm/wasm-pack).
-
-This template is designed for compiling Rust libraries into WebAssembly and
-publishing the resulting package to NPM.
-
-* Want to use the published NPM package in a Website? [Check out
-  `create-wasm-app`.](https://github.com/rustwasm/create-wasm-app)
-* Want to make a monorepo-style Website without publishing to NPM? Check out
-  [`rust-webpack-template`](https://github.com/rustwasm/rust-webpack-template)
-  and/or
-  [`rust-parcel-template`](https://github.com/rustwasm/rust-parcel-template).
-
-## 🔋 Batteries Included
-
-* [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
-  between WebAssembly and JavaScript.
-* [`console_error_panic_hook`](https://github.com/rustwasm/console_error_panic_hook)
-  for logging panic messages to the developer console.
-* [`wee_alloc`](https://github.com/rustwasm/wee_alloc), an allocator optimized
-  for small code size.
+> Alot of this code is copy pasted from `https://github.com/PistonDevelopers/imageproc`
 
 ## 🚴 Usage
-
-### 🐑 Use `cargo generate` to Clone this Template
-
-[Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
-
-```
-cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name my-project
-cd my-project
-```
 
 ### 🛠️ Build with `wasm-pack build`
 
@@ -44,10 +16,10 @@ cd my-project
 wasm-pack build
 ```
 
-### 🔬 Test in Headless Browsers with `wasm-pack test`
+### 🛠️Start demo app with `npm start`
 
 ```
-wasm-pack test --headless --firefox
+cd www && npm start
 ```
 
 ### 🎁 Publish to NPM with `wasm-pack publish`
@@ -55,3 +27,11 @@ wasm-pack test --headless --firefox
 ```
 wasm-pack publish
 ```
+
+## 🏎 Speed
+On my newish MBP, the `detect` function completes in about 31ms. I'd like to get it under 20ms.
+
+## Size
+- JavaScript < 700b (gzip)
+- Wasm ~ 18kb (gzip)
+
