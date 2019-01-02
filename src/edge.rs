@@ -1,6 +1,6 @@
 //! Functions for detecting edges in images.
 
-use image::{GenericImageView, GrayImage, ImageBuffer, Luma, Rgba};
+use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, LumaA, Rgba};
 use imageproc::gradients::{horizontal_sobel, vertical_sobel};
 use std::f32;
 
@@ -27,7 +27,7 @@ pub fn canny(
     src_buf: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     low_threshold: f32,
     high_threshold: f32,
-    count: u32,
+    hue: u32,
 ) {
     // Heavily based on the implementation proposed by wikipedia.
     // 1. Gaussian blur.(we don't do this step to boost speed).
@@ -49,7 +49,7 @@ pub fn canny(
     let thinned = non_maximum_suppression(&g, &gx, &gy);
 
     // 4. Hysteresis to filter out edges based on thresholds.
-    hysteresis(&thinned, src_buf, low_threshold, high_threshold, count);
+    hysteresis(&thinned, src_buf, low_threshold, high_threshold, hue);
 }
 
 /// Finds local maxima to make the edges thinner.
@@ -57,12 +57,14 @@ fn non_maximum_suppression(
     g: &ImageBuffer<Luma<f32>, Vec<f32>>,
     gx: &ImageBuffer<Luma<i16>, Vec<i16>>,
     gy: &ImageBuffer<Luma<i16>, Vec<i16>>,
-) -> ImageBuffer<Luma<f32>, Vec<f32>> {
+) -> ImageBuffer<LumaA<f32>, Vec<f32>> {
     const RADIANS_TO_DEGREES: f32 = 180f32 / f32::consts::PI;
     // TODO: maybe reuse this memory to decrease allocations?
-    let mut out = ImageBuffer::from_pixel(g.width(), g.height(), Luma { data: [0.0] });
-    for y in 1..g.height() - 1 {
-        for x in 1..g.width() - 1 {
+    let w = g.width();
+    let h = g.height();
+    let mut out = ImageBuffer::from_pixel(w, h, LumaA { data: [0.0, 0.0] });
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
             let x_gradient = gx[(x, y)][0] as f32;
             let y_gradient = gy[(x, y)][0] as f32;
             let mut angle = (y_gradient).atan2(x_gradient) * RADIANS_TO_DEGREES;
@@ -98,13 +100,19 @@ fn non_maximum_suppression(
                     _ => unreachable!(),
                 }
             };
-            let pixel = *g.get_pixel(x, y);
-            // If the pixel is not a local maximum, suppress it.
-            if pixel[0] < cmp1[0] || pixel[0] < cmp2[0] {
-                out.put_pixel(x, y, Luma { data: [0.0] });
-            } else {
-                out.put_pixel(x, y, pixel);
-            }
+            unsafe {
+                let pixel = g.unsafe_get_pixel(x, y);
+                // If the pixel is not a local maximum, suppress it.
+                if !(pixel[0] < cmp1[0]) && !(pixel[0] < cmp2[0]) {
+                    out.unsafe_put_pixel(
+                        x,
+                        y,
+                        LumaA {
+                            data: [pixel.data[0], angle],
+                        },
+                    );
+                }
+            };
         }
     }
     out
@@ -113,30 +121,32 @@ fn non_maximum_suppression(
 /// Filter out edges with the thresholds.
 /// Non-recursive breadth-first search.
 fn hysteresis(
-    input: &ImageBuffer<Luma<f32>, Vec<f32>>,
+    input: &ImageBuffer<LumaA<f32>, Vec<f32>>,
     out: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     low_thresh: f32,
     high_thresh: f32,
     hue: u32,
 ) {
-    let (r, g, b) = cubehelix_to_rgb(hue, 1.0, 0.58);
-    let pixel = image::Rgba {
-        data: [r, g, b, 255u8],
-    };
     // Init output image as all black.
     let mut tracking = ImageBuffer::from_pixel(input.width(), input.height(), Luma { data: [0u8] });
     // Stack. Possible optimization: Use previously allocated memory, i.e. gx.
     let mut edges = Vec::with_capacity(((input.width() * input.height()) / 2) as usize);
     for y in 1..input.height() - 1 {
         for x in 1..input.width() - 1 {
-            let inp_pix = *input.get_pixel(x, y);
-            let out_pix = *tracking.get_pixel(x, y);
+            let inp_pix = unsafe { input.unsafe_get_pixel(x, y) };
+            let out_pix = unsafe { tracking.unsafe_get_pixel(x, y) };
             // If the edge strength is higher than high_thresh, mark it as an edge.
             if inp_pix[0] >= high_thresh && out_pix[0] == 0 {
-                tracking.put_pixel(x, y, Luma { data: [255u8] });
-                out.put_pixel(x, y, pixel);
-                out.put_pixel(x - 1, y, pixel);
-                out.put_pixel(x + 1, y, pixel);
+                let (r, g, b) = cubehelix_to_rgb(inp_pix[1], 1.0, 0.58);
+                let pixel = image::Rgba {
+                    data: [r, g, b, 255u8],
+                };
+                unsafe {
+                    tracking.unsafe_put_pixel(x, y, Luma { data: [255u8] });
+                    out.unsafe_put_pixel(x, y, pixel);
+                    out.unsafe_put_pixel(x - 1, y, pixel);
+                    out.unsafe_put_pixel(x + 1, y, pixel);
+                };
                 edges.push((x, y));
 
                 // Track neighbors until no neighbor is >= low_thresh.
@@ -152,19 +162,27 @@ fn hysteresis(
                     ];
 
                     for neighbor_idx in &neighbor_indices {
-                        let in_neighbor = *input.get_pixel(neighbor_idx.0, neighbor_idx.1);
-                        let out_neighbor = *tracking.get_pixel(neighbor_idx.0, neighbor_idx.1);
+                        let in_neighbor =
+                            unsafe { input.unsafe_get_pixel(neighbor_idx.0, neighbor_idx.1) };
+                        let out_neighbor =
+                            unsafe { tracking.unsafe_get_pixel(neighbor_idx.0, neighbor_idx.1) };
                         if in_neighbor[0] >= low_thresh && out_neighbor[0] == 0 {
-                            tracking.put_pixel(
-                                neighbor_idx.0,
-                                neighbor_idx.1,
-                                Luma { data: [255u8] },
-                            );
-                            out.put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
-                            out.put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
-                            out.put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
-                            // out.put_pixel(neighbor_idx.0, neighbor_idx.1 - 1, pixel);
-                            // out.put_pixel(neighbor_idx.0, neighbor_idx.1 + 1, pixel);
+                            let (r, g, b) = cubehelix_to_rgb(in_neighbor[1], 1.0, 0.58);
+                            let pixel = image::Rgba {
+                                data: [r, g, b, 255u8],
+                            };
+                            unsafe {
+                                tracking.unsafe_put_pixel(
+                                    neighbor_idx.0,
+                                    neighbor_idx.1,
+                                    Luma { data: [255u8] },
+                                );
+                                out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
+                                out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
+                                out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
+                                // out.put_pixel(neighbor_idx.0, neighbor_idx.1 - 1, pixel);
+                                // out.put_pixel(neighbor_idx.0, neighbor_idx.1 + 1, pixel);
+                            };
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }
                     }
@@ -192,8 +210,8 @@ fn hex(v: f32) -> u8 {
     }
 }
 
-fn cubehelix_to_rgb(hue: u32, sat: f32, light: f32) -> (u8, u8, u8) {
-    let h = (hue as f32 + 120.0) * (PI / 180.0);
+fn cubehelix_to_rgb(hue: f32, sat: f32, light: f32) -> (u8, u8, u8) {
+    let h = (hue * 2.0) * (PI / 180.0);
     let l = light;
     let a = sat * light * (1.0 - light);
     let cosh = h.cos();

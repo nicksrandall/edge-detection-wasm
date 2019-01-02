@@ -22,7 +22,7 @@ cfg_if! {
 }
 
 #[wasm_bindgen]
-pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, count: u32) -> Clamped<Vec<u8>> {
+pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, hue: u32) -> Clamped<Vec<u8>> {
     let buf_vec = buf.0;
 
     // create image from image buffer
@@ -40,7 +40,7 @@ pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, count: u32) -> Cla
         .expect("Could not load image from input buffer");
 
     // create gray image from gray image buffer
-    edge::canny(&gray_image, &mut source_buffer, 150.0, 300.0, count);
+    edge::canny(&gray_image, &mut source_buffer, 150.0, 300.0, hue);
 
     // clamp results for canvas
     Clamped(source_buffer.into_raw())
