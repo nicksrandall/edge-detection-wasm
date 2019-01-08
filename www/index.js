@@ -11,7 +11,12 @@ function tick() {
   ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   console.time('edge::detect');
-  const data = wasm.detect(imageData.data, canvas.width, canvas.height, count);
+  const data = wasm.detect(
+    imageData.data,
+    canvas.width,
+    canvas.height,
+    0xff9e24ff,
+  );
   console.timeEnd('edge::detect');
   ctx.putImageData(new ImageData(data, canvas.width, canvas.height), 0, 0);
   count++;
