@@ -1,6 +1,5 @@
 // import Worker from 'worker-loader!./worker.js';
 import * as wasm from 'edge-detection-wasm';
-console.log(wasm);
 
 const canvas = document.getElementById('canvas');
 const videoEl = document.getElementById('video');

@@ -12,14 +12,13 @@ mod edge;
 mod utils;
 
 use image::{GenericImage, Pixel};
+use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
-use std::sync::Mutex;
-
 
 lazy_static! {
-    // Since it's mutable and shared, use mutext.
-    static ref GRAY_IMAGE: Mutex<image::GrayImage> = Mutex::new(image::GrayImage::new(640, 480));
+  // Since it's mutable and shared, use mutext.
+  static ref GRAY_IMAGE: Mutex<image::GrayImage> = Mutex::new(image::GrayImage::new(640, 480));
 }
 
 #[wasm_bindgen]
@@ -33,10 +32,20 @@ pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, hue: u32) -> Clamp
     // convert image buffer to grayscale (luma) buffer;
     let mut gray_image = GRAY_IMAGE.lock().unwrap();
     unsafe {
-      for (x, y , p) in source_buffer.enumerate_pixels() {
-          gray_image.unsafe_put_pixel(x, y, p.to_luma());
-      }
+        for (x, y, p) in source_buffer.enumerate_pixels() {
+            gray_image.unsafe_put_pixel(x, y, p.to_luma());
+        }
     };
+
+    // convert image buffer to grayscale (luma) buffer;
+    // let mut gray_vec: Vec<u8> = Vec::with_capacity(width as usize * height as usize);
+    // for p in source_buffer.pixels() {
+    //     gray_vec.push(p.to_luma().data[0]);
+    // }
+
+    // create gray image from gray image buffer
+    // let gray_image = image::GrayImage::from_vec(width, height, gray_vec)
+    //     .expect("Could not load image from input buffer");
 
     // create gray image from gray image buffer
     edge::canny(&gray_image, &mut source_buffer, 150.0, 300.0, hue);

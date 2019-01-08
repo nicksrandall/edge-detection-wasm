@@ -1,6 +1,6 @@
 //! Functions for detecting edges in images.
 
-use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, Rgba};
+use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, LumaA, Rgba};
 // use imageproc::filter::gaussian_blur_f32;
 use std::{f32, i16};
 use std::mem::transmute;
@@ -9,7 +9,8 @@ use std::cmp::{min, max};
 
 
 static BLACK: Luma<u8> = Luma { data: [0u8] };
-static BLACK_32: Luma<f32> = Luma { data: [0.0] };
+static BLACK_32: LumaA<f32> = LumaA { data: [0.0, 255.0] };
+static WHITE: Luma<u8> = Luma { data: [255u8] };
 
 /// Sobel filter for detecting vertical gradients.
 static VERTICAL_SOBEL: [i32; 9] = [
@@ -28,7 +29,7 @@ lazy_static! {
     static ref VERT:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref HORIZ:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref IN_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
-    static ref OUT_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
+    static ref OUT_IMAGE: Mutex<ImageBuffer<LumaA<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref EDGES: Mutex<Vec<(u32, u32)>> = Mutex::new(Vec::with_capacity((640 * 480) / 2));
 }
 
@@ -86,11 +87,9 @@ fn non_maximum_suppression(
     g: &ImageBuffer<Luma<f32>, Vec<f32>>,
     gx: &ImageBuffer<Luma<i16>, Vec<i16>>,
     gy: &ImageBuffer<Luma<i16>, Vec<i16>>,
-    out: &mut ImageBuffer<Luma<f32>, Vec<f32>>,
+    out: &mut ImageBuffer<LumaA<f32>, Vec<f32>>,
 ) {
     const RADIANS_TO_DEGREES: f32 = 180f32 / f32::consts::PI;
-    // TODO: maybe reuse this memory to decrease allocations?
-    // let mut out = ImageBuffer::new(640, 480);
     for y in 1..g.height() - 1 {
         for x in 1..g.width() - 1 {
             let x_gradient = gx[(x, y)][0] as f32;
@@ -99,20 +98,22 @@ fn non_maximum_suppression(
             if angle < 0.0 {
                 angle += 180.0
             }
-            let (cmp1, cmp2) = unsafe {
+            let (cmp1, cmp2, angle) = unsafe {
                 if angle >= 157.5 || angle < 22.5 {
-                    (g.unsafe_get_pixel(x - 1, y), g.unsafe_get_pixel(x + 1, y))
+                    (g.unsafe_get_pixel(x - 1, y), g.unsafe_get_pixel(x + 1, y), 0.0)
                 } else if angle >= 22.5 && angle < 67.5 {
                     (
                         g.unsafe_get_pixel(x + 1, y + 1),
                         g.unsafe_get_pixel(x - 1, y - 1),
+                        45.0
                     )
                 } else if angle >= 67.5 && angle < 112.5 {
-                    (g.unsafe_get_pixel(x, y - 1), g.unsafe_get_pixel(x, y + 1))
+                    (g.unsafe_get_pixel(x, y - 1), g.unsafe_get_pixel(x, y + 1), 90.0)
                 } else if angle >= 112.5 && angle < 157.5 {
                     (
                         g.unsafe_get_pixel(x - 1, y + 1),
                         g.unsafe_get_pixel(x + 1, y - 1),
+                        135.0
                     )
                 } else {
                     unreachable!()
@@ -122,10 +123,10 @@ fn non_maximum_suppression(
             unsafe {
                 let pixel = g.unsafe_get_pixel(x, y);
                 // If the pixel is not a local maximum, suppress it.
-                if (pixel[0] < cmp1[0]) || (pixel[0] < cmp2[0]) {
-                    out.unsafe_put_pixel(x, y, pixel);
-                } else {
+                if pixel[0] < cmp1[0] || pixel[0] < cmp2[0] {
                     out.unsafe_put_pixel(x, y, BLACK_32);
+                } else {
+                    out.unsafe_put_pixel(x, y, LumaA { data: [pixel.data[0], angle] });
                 }
             }
         }
@@ -135,7 +136,7 @@ fn non_maximum_suppression(
 /// Filter out edges with the thresholds.
 /// Non-recursive breadth-first search.
 fn hysteresis(
-    input: &ImageBuffer<Luma<f32>, Vec<f32>>,
+    input: &ImageBuffer<LumaA<f32>, Vec<f32>>,
     out: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     low_thresh: f32,
     high_thresh: f32,
@@ -162,10 +163,21 @@ fn hysteresis(
             // If the edge strength is higher than high_thresh, mark it as an edge.
             if inp_pix[0] >= high_thresh && out_pix[0] == 0 {
                 unsafe {
-                    tracking.unsafe_put_pixel(x, y, Luma { data: [255u8] });
+                    tracking.unsafe_put_pixel(x, y, WHITE);
                     out.unsafe_put_pixel(x, y, pixel);
-                    out.unsafe_put_pixel(x - 1, y, pixel);
-                    out.unsafe_put_pixel(x + 1, y, pixel);
+                    if inp_pix[1] == 0.0 {
+                      out.unsafe_put_pixel(x - 1, y, pixel);
+                      out.unsafe_put_pixel(x + 1, y, pixel);
+                    } else if inp_pix[1] == 45.0 {
+                      out.unsafe_put_pixel(x + 1, y + 1, pixel);
+                      out.unsafe_put_pixel(x - 1, y - 1, pixel);
+                    } else if inp_pix[1] == 90.0 {
+                      out.unsafe_put_pixel(x, y + 1, pixel);
+                      out.unsafe_put_pixel(x, y - 1, pixel);
+                    } else if inp_pix[1] == 135.0 {
+                      out.unsafe_put_pixel(x + 1, y - 1, pixel);
+                      out.unsafe_put_pixel(x - 1, y + 1, pixel);
+                    }
                 };
                 edges.push((x, y));
 
@@ -193,11 +205,22 @@ fn hysteresis(
                                 tracking.unsafe_put_pixel(
                                     neighbor_idx.0,
                                     neighbor_idx.1,
-                                    Luma { data: [255u8] },
+                                    WHITE,
                                 );
                                 out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
-                                out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
-                                out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
+                                if in_neighbor[1] == 0.0 {
+                                  out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
+                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
+                                } else if in_neighbor[1] == 45.0 {
+                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1 + 1, pixel);
+                                  out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1 - 1, pixel);
+                                } else if in_neighbor[1] == 90.0 {
+                                  out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1 + 1, pixel);
+                                  out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1 - 1, pixel);
+                                } else if in_neighbor[1] == 135.0 {
+                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1 - 1, pixel);
+                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1 - 1, pixel);
+                                }
                             };
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }
