@@ -1,7 +1,7 @@
 //! Functions for detecting edges in images.
 
 use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, Rgba};
-// use imageproc::gradients::{vertical_sobel, horizontal_sobel};
+// use imageproc::filter::gaussian_blur_f32;
 use std::{f32, i16};
 use std::mem::transmute;
 use std::sync::Mutex;
@@ -27,6 +27,7 @@ lazy_static! {
     // Since it's mutable and shared, use mutext.
     static ref VERT:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref HORIZ:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
+    static ref IN_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref OUT_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref EDGES: Mutex<Vec<(u32, u32)>> = Mutex::new(Vec::with_capacity((640 * 480) / 2));
 }
@@ -55,32 +56,26 @@ pub fn canny(
     high_threshold: f32,
     hue: u32,
 ) {
+    let mut gx = HORIZ.lock().unwrap();
+    let mut gy = VERT.lock().unwrap();
+    let mut out = OUT_IMAGE.lock().unwrap();
+    let mut in_image = IN_IMAGE.lock().unwrap();
+
     // Heavily based on the implementation proposed by wikipedia.
     // 1. Gaussian blur.(we don't do this step to boost speed).
     // const SIGMA: f32 = 1.4;
     // let blurred = gaussian_blur_f32(image, SIGMA);
 
     // 2. Intensity of gradients.
-    let mut gx = HORIZ.lock().unwrap();
-    let mut gy = VERT.lock().unwrap();
+    filter(&image, HORIZONTAL_SOBEL, VERTICAL_SOBEL, &mut gx, &mut gy);
 
-    filter(&image, HORIZONTAL_SOBEL, &mut gx);
-    filter(&image, VERTICAL_SOBEL, &mut gy);
-
-    // let gx = horizontal_sobel(&image);
-    // let gy = vertical_sobel(&image);
-
-    let g = gx
-        .iter()
-        .zip(gy.iter())
-        .map(|(h, v)| ((*h as f32) * (*h as f32) + (*v as f32) * (*v as f32)))
-        .collect::<Vec<f32>>();
-    let g = ImageBuffer::from_raw(image.width(), image.height(), g).unwrap();
-
-    let mut out = OUT_IMAGE.lock().unwrap();
+    // collect bolth
+    for ((h, v), p) in gx .iter().zip(gy.iter()).zip(in_image.iter_mut()) {
+      *p = (*h as f32) * (*h as f32) + (*v as f32) * (*v as f32)
+    }
 
     // 3. Non-maximum-suppression (Make edges thinner)
-    non_maximum_suppression(&g, &gx, &gy, &mut out);
+    non_maximum_suppression(&in_image, &gx, &gy, &mut out);
 
     // 4. Hysteresis to filter out edges based on thresholds.
     hysteresis(&out, src_buf, low_threshold, high_threshold, hue);
@@ -153,7 +148,6 @@ fn hysteresis(
     };
     // Init output image as all black.
     let mut tracking = ImageBuffer::from_pixel(input.width(), input.height(), BLACK);
-    // Stack. Possible optimization: Use previously allocated memory, i.e. gx.
     let mut edges = EDGES.lock().unwrap();
     edges.clear();
 
@@ -204,8 +198,6 @@ fn hysteresis(
                                 out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
                                 out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
                                 out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
-                                // out.put_pixel(neighbor_idx.0, neighbor_idx.1 - 1, pixel);
-                                // out.put_pixel(neighbor_idx.0, neighbor_idx.1 + 1, pixel);
                             };
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }
@@ -216,10 +208,12 @@ fn hysteresis(
     }
 }
 
-pub fn filter(image: &GrayImage, data: [i32; 9], out: &mut ImageBuffer<Luma<i16>, Vec<i16>>) {
+pub fn filter(image: &GrayImage, hdata: [i32; 9], vdata: [i32; 9], hout: &mut ImageBuffer<Luma<i16>, Vec<i16>>, vout: &mut ImageBuffer<Luma<i16>, Vec<i16>>) {
     let (width, height) = image.dimensions();
-    let mut acc = 0_i32;
     let (k_width, k_height) = (3, 3);
+
+    let mut hacc = 0_i32;
+    let mut vacc = 0_i32;
 
     for y in 0..height {
         for x in 0..width {
@@ -233,17 +227,21 @@ pub fn filter(image: &GrayImage, data: [i32; 9], out: &mut ImageBuffer<Luma<i16>
                         width + width - 1,
                         max(width, width + x + k_x - k_width / 2),
                     ) - width;
-                    let (p, k) = unsafe {
+                    let (p, hk, vk) = unsafe {
                         (
                             image.unsafe_get_pixel(x_p, y_p),
-                            data.get_unchecked((k_y * k_width + k_x) as usize),
+                            hdata.get_unchecked((k_y * k_width + k_x) as usize),
+                            vdata.get_unchecked((k_y * k_width + k_x) as usize),
                         )
                     };
-                    acc = accumulate(acc, &p, *k);
+                    hacc = accumulate(hacc, &p, *hk);
+                    vacc = accumulate(vacc, &p, *vk);
                 }
             }
-            out.get_pixel_mut(x, y)[0] = clamp(acc);
-            acc = 0_i32;
+            hout.get_pixel_mut(x, y)[0] = clamp(hacc);
+            vout.get_pixel_mut(x, y)[0] = clamp(vacc);
+            hacc = 0_i32;
+            vacc = 0_i32;
         }
     }
 }
