@@ -1,35 +1,26 @@
 //! Functions for detecting edges in images.
 
-use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, LumaA, Rgba};
+use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, Rgba};
 // use imageproc::filter::gaussian_blur_f32;
-use std::{f32, i16};
+use std::cmp::{max, min};
 use std::mem::transmute;
 use std::sync::Mutex;
-use std::cmp::{min, max};
+use std::{f32, i16};
 
-
-static BLACK: Luma<u8> = Luma { data: [0u8] };
-static BLACK_32: LumaA<f32> = LumaA { data: [0.0, 255.0] };
-static WHITE: Luma<u8> = Luma { data: [255u8] };
+static BLACK_32: Luma<f32> = Luma { data: [0.0] };
 
 /// Sobel filter for detecting vertical gradients.
-static VERTICAL_SOBEL: [i32; 9] = [
-    -1, -2, -1,
-     0,  0,  0,
-     1,  2,  1];
+static VERTICAL_SOBEL: [i32; 9] = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
 
 /// Sobel filter for detecting horizontal gradients.
-static HORIZONTAL_SOBEL: [i32; 9] = [
-    -1, 0, 1,
-    -2, 0, 2,
-    -1, 0, 1];
+static HORIZONTAL_SOBEL: [i32; 9] = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
 
 lazy_static! {
     // Since it's mutable and shared, use mutext.
     static ref VERT:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref HORIZ:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref IN_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
-    static ref OUT_IMAGE: Mutex<ImageBuffer<LumaA<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
+    static ref OUT_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
     static ref EDGES: Mutex<Vec<(u32, u32)>> = Mutex::new(Vec::with_capacity((640 * 480) / 2));
 }
 
@@ -71,8 +62,8 @@ pub fn canny(
     filter(&image, HORIZONTAL_SOBEL, VERTICAL_SOBEL, &mut gx, &mut gy);
 
     // collect bolth
-    for ((h, v), p) in gx .iter().zip(gy.iter()).zip(in_image.iter_mut()) {
-      *p = (*h as f32) * (*h as f32) + (*v as f32) * (*v as f32)
+    for ((h, v), p) in gx.iter().zip(gy.iter()).zip(in_image.iter_mut()) {
+        *p = (*h as f32) * (*h as f32) + (*v as f32) * (*v as f32)
     }
 
     // 3. Non-maximum-suppression (Make edges thinner)
@@ -87,7 +78,7 @@ fn non_maximum_suppression(
     g: &ImageBuffer<Luma<f32>, Vec<f32>>,
     gx: &ImageBuffer<Luma<i16>, Vec<i16>>,
     gy: &ImageBuffer<Luma<i16>, Vec<i16>>,
-    out: &mut ImageBuffer<LumaA<f32>, Vec<f32>>,
+    out: &mut ImageBuffer<Luma<f32>, Vec<f32>>,
 ) {
     const RADIANS_TO_DEGREES: f32 = 180f32 / f32::consts::PI;
     for y in 1..g.height() - 1 {
@@ -98,22 +89,20 @@ fn non_maximum_suppression(
             if angle < 0.0 {
                 angle += 180.0
             }
-            let (cmp1, cmp2, angle) = unsafe {
+            let (cmp1, cmp2) = unsafe {
                 if angle >= 157.5 || angle < 22.5 {
-                    (g.unsafe_get_pixel(x - 1, y), g.unsafe_get_pixel(x + 1, y), 0.0)
+                    (g.unsafe_get_pixel(x - 1, y), g.unsafe_get_pixel(x + 1, y))
                 } else if angle >= 22.5 && angle < 67.5 {
                     (
                         g.unsafe_get_pixel(x + 1, y + 1),
                         g.unsafe_get_pixel(x - 1, y - 1),
-                        45.0
                     )
                 } else if angle >= 67.5 && angle < 112.5 {
-                    (g.unsafe_get_pixel(x, y - 1), g.unsafe_get_pixel(x, y + 1), 90.0)
+                    (g.unsafe_get_pixel(x, y - 1), g.unsafe_get_pixel(x, y + 1))
                 } else if angle >= 112.5 && angle < 157.5 {
                     (
                         g.unsafe_get_pixel(x - 1, y + 1),
                         g.unsafe_get_pixel(x + 1, y - 1),
-                        135.0
                     )
                 } else {
                     unreachable!()
@@ -126,7 +115,7 @@ fn non_maximum_suppression(
                 if pixel[0] < cmp1[0] || pixel[0] < cmp2[0] {
                     out.unsafe_put_pixel(x, y, BLACK_32);
                 } else {
-                    out.unsafe_put_pixel(x, y, LumaA { data: [pixel.data[0], angle] });
+                    out.unsafe_put_pixel(x, y, pixel);
                 }
             }
         }
@@ -136,48 +125,29 @@ fn non_maximum_suppression(
 /// Filter out edges with the thresholds.
 /// Non-recursive breadth-first search.
 fn hysteresis(
-    input: &ImageBuffer<LumaA<f32>, Vec<f32>>,
+    input: &ImageBuffer<Luma<f32>, Vec<f32>>,
     out: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     low_thresh: f32,
     high_thresh: f32,
     hue: u32,
 ) {
+    let color: [u8; 4] = unsafe { transmute(hue.to_be()) };
     let low_thresh = low_thresh * low_thresh;
     let high_thresh = high_thresh * high_thresh;
-    let pixel = image::Rgba {
-        data: unsafe { transmute(hue.to_be()) },
-    };
+    let pixel = image::Rgba { data: color };
     // Init output image as all black.
-    let mut tracking = ImageBuffer::from_pixel(input.width(), input.height(), BLACK);
+    // let mut tracking = ImageBuffer::from_pixel(input.width(), input.height(), BLACK);
     let mut edges = EDGES.lock().unwrap();
     edges.clear();
 
     for y in 1..input.height() - 1 {
         for x in 1..input.width() - 1 {
-            let (inp_pix, out_pix) = unsafe {
-                (
-                    input.unsafe_get_pixel(x, y),
-                    tracking.unsafe_get_pixel(x, y),
-                )
-            };
+            let (inp_pix, out_pix) =
+                unsafe { (input.unsafe_get_pixel(x, y), out.unsafe_get_pixel(x, y)) };
             // If the edge strength is higher than high_thresh, mark it as an edge.
-            if inp_pix[0] >= high_thresh && out_pix[0] == 0 {
+            if inp_pix[0] >= high_thresh && out_pix != pixel {
                 unsafe {
-                    tracking.unsafe_put_pixel(x, y, WHITE);
                     out.unsafe_put_pixel(x, y, pixel);
-                    if inp_pix[1] == 0.0 {
-                      out.unsafe_put_pixel(x - 1, y, pixel);
-                      out.unsafe_put_pixel(x + 1, y, pixel);
-                    } else if inp_pix[1] == 45.0 {
-                      out.unsafe_put_pixel(x + 1, y + 1, pixel);
-                      out.unsafe_put_pixel(x - 1, y - 1, pixel);
-                    } else if inp_pix[1] == 90.0 {
-                      out.unsafe_put_pixel(x, y + 1, pixel);
-                      out.unsafe_put_pixel(x, y - 1, pixel);
-                    } else if inp_pix[1] == 135.0 {
-                      out.unsafe_put_pixel(x + 1, y - 1, pixel);
-                      out.unsafe_put_pixel(x - 1, y + 1, pixel);
-                    }
                 };
                 edges.push((x, y));
 
@@ -197,30 +167,12 @@ fn hysteresis(
                         let (in_neighbor, out_neighbor) = unsafe {
                             (
                                 input.unsafe_get_pixel(neighbor_idx.0, neighbor_idx.1),
-                                tracking.unsafe_get_pixel(neighbor_idx.0, neighbor_idx.1),
+                                out.unsafe_get_pixel(neighbor_idx.0, neighbor_idx.1),
                             )
                         };
-                        if in_neighbor[0] >= low_thresh && out_neighbor[0] == 0 {
+                        if in_neighbor[0] >= low_thresh && out_neighbor != pixel {
                             unsafe {
-                                tracking.unsafe_put_pixel(
-                                    neighbor_idx.0,
-                                    neighbor_idx.1,
-                                    WHITE,
-                                );
                                 out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
-                                if in_neighbor[1] == 0.0 {
-                                  out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1, pixel);
-                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1, pixel);
-                                } else if in_neighbor[1] == 45.0 {
-                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1 + 1, pixel);
-                                  out.unsafe_put_pixel(neighbor_idx.0 - 1, neighbor_idx.1 - 1, pixel);
-                                } else if in_neighbor[1] == 90.0 {
-                                  out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1 + 1, pixel);
-                                  out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1 - 1, pixel);
-                                } else if in_neighbor[1] == 135.0 {
-                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1 - 1, pixel);
-                                  out.unsafe_put_pixel(neighbor_idx.0 + 1, neighbor_idx.1 - 1, pixel);
-                                }
                             };
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }
@@ -231,7 +183,13 @@ fn hysteresis(
     }
 }
 
-pub fn filter(image: &GrayImage, hdata: [i32; 9], vdata: [i32; 9], hout: &mut ImageBuffer<Luma<i16>, Vec<i16>>, vout: &mut ImageBuffer<Luma<i16>, Vec<i16>>) {
+pub fn filter(
+    image: &GrayImage,
+    hdata: [i32; 9],
+    vdata: [i32; 9],
+    hout: &mut ImageBuffer<Luma<i16>, Vec<i16>>,
+    vout: &mut ImageBuffer<Luma<i16>, Vec<i16>>,
+) {
     let (width, height) = image.dimensions();
     let (k_width, k_height) = (3, 3);
 
@@ -246,10 +204,8 @@ pub fn filter(image: &GrayImage, hdata: [i32; 9], vdata: [i32; 9], hout: &mut Im
                     max(height, height + y + k_y - k_height / 2),
                 ) - height;
                 for k_x in 0..k_width {
-                    let x_p = min(
-                        width + width - 1,
-                        max(width, width + x + k_x - k_width / 2),
-                    ) - width;
+                    let x_p =
+                        min(width + width - 1, max(width, width + x + k_x - k_width / 2)) - width;
                     let (p, hk, vk) = unsafe {
                         (
                             image.unsafe_get_pixel(x_p, y_p),
@@ -270,15 +226,15 @@ pub fn filter(image: &GrayImage, hdata: [i32; 9], vdata: [i32; 9], hout: &mut Im
 }
 
 fn clamp(x: i32) -> i16 {
-  if x < i16::MAX as i32 {
-    if x > i16::MIN as i32 {
-      x as i16
+    if x < i16::MAX as i32 {
+        if x > i16::MIN as i32 {
+            x as i16
+        } else {
+            i16::MIN
+        }
     } else {
-      i16::MIN
+        i16::MAX
     }
-  } else {
-    i16::MAX
-  }
 }
 
 fn accumulate(acc: i32, pixel: &Luma<u8>, weight: i32) -> i32 {

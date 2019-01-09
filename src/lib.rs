@@ -11,7 +11,7 @@ extern crate wasm_bindgen;
 mod edge;
 mod utils;
 
-use image::{GenericImage, Pixel};
+use image::{Pixel};
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
@@ -31,24 +31,12 @@ pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, hue: u32) -> Clamp
 
     // convert image buffer to grayscale (luma) buffer;
     let mut gray_image = GRAY_IMAGE.lock().unwrap();
-    unsafe {
-        for (x, y, p) in source_buffer.enumerate_pixels() {
-            gray_image.unsafe_put_pixel(x, y, p.to_luma());
-        }
-    };
-
-    // convert image buffer to grayscale (luma) buffer;
-    // let mut gray_vec: Vec<u8> = Vec::with_capacity(width as usize * height as usize);
-    // for p in source_buffer.pixels() {
-    //     gray_vec.push(p.to_luma().data[0]);
-    // }
+    for (x, y, p) in source_buffer.enumerate_pixels() {
+        gray_image.put_pixel(x, y, p.to_luma());
+    }
 
     // create gray image from gray image buffer
-    // let gray_image = image::GrayImage::from_vec(width, height, gray_vec)
-    //     .expect("Could not load image from input buffer");
-
-    // create gray image from gray image buffer
-    edge::canny(&gray_image, &mut source_buffer, 150.0, 300.0, hue);
+    edge::canny(&gray_image, &mut source_buffer, 100.0, 300.0, hue);
 
     // clamp results for canvas
     Clamped(source_buffer.into_raw())
@@ -61,17 +49,19 @@ mod tests {
     use image::*;
     use test::Bencher;
 
+    const ORANGE: u32 = 4288554239;
+
     #[test]
     fn detect_works() {
-        let img = image::open("test_images/building_small.jpg").unwrap();
+        let img = image::open("test_images/test.jpg").unwrap();
         let width = img.width();
         let height = img.height();
         let raw = Clamped(img.to_rgba().into_raw());
-        let out = detect(raw, width, height, 1);
+        let out = detect(raw, width, height, ORANGE);
         let out_buf = image::RgbaImage::from_vec(width, height, out.to_vec())
             .expect("Could not load image from buf");
 
-        out_buf.save("test.jpeg").expect("Could not save test file");
+        out_buf.save("test.jpg").expect("Could not save test file");
 
         assert!(true); // TODO: write real tests
     }
