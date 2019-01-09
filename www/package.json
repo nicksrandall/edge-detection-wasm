@@ -14,12 +14,7 @@
     "type": "git",
     "url": "git+https://github.com/rustwasm/create-wasm-app.git"
   },
-  "keywords": [
-    "webassembly",
-    "wasm",
-    "rust",
-    "webpack"
-  ],
+  "keywords": ["webassembly", "wasm", "rust", "webpack"],
   "author": "Ashley Williams <ashley666ashley@gmail.com>",
   "license": "(MIT OR Apache-2.0)",
   "bugs": {
