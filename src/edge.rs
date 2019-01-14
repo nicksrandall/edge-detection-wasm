@@ -136,7 +136,6 @@ fn hysteresis(
     let high_thresh = high_thresh * high_thresh;
     let pixel = image::Rgba { data: color };
     // Init output image as all black.
-    // let mut tracking = ImageBuffer::from_pixel(input.width(), input.height(), BLACK);
     let mut edges = EDGES.lock().unwrap();
     edges.clear();
 
@@ -145,7 +144,7 @@ fn hysteresis(
             let (inp_pix, out_pix) =
                 unsafe { (input.unsafe_get_pixel(x, y), out.unsafe_get_pixel(x, y)) };
             // If the edge strength is higher than high_thresh, mark it as an edge.
-            if inp_pix[0] >= high_thresh && out_pix != pixel {
+            if inp_pix[0] >= high_thresh && out_pix[0] != pixel[0] {
                 unsafe {
                     out.unsafe_put_pixel(x, y, pixel);
                 };
@@ -155,13 +154,21 @@ fn hysteresis(
                 while !edges.is_empty() {
                     let (nx, ny) = edges.pop().unwrap();
                     let neighbor_indices = [
-                        (nx + 1, ny),
-                        (nx + 1, ny + 1),
-                        (nx, ny + 1),
-                        (nx - 1, ny - 1),
-                        (nx - 1, ny),
-                        (nx - 1, ny + 1),
+                        (nx + 1, ny, nx - 1, ny + 1),
+                        (nx + 1, ny + 1, nx + 1, ny),
+                        (nx, ny + 1, nx + 1, ny + 1),
+                        (nx - 1, ny - 1, nx, ny + 1),
+                        (nx - 1, ny, nx - 1, ny - 1),
+                        (nx - 1, ny + 1, nx - 1, ny),
                     ];
+                    // let neighbor_indices = [
+                    //     (nx + 1, ny),
+                    //     (nx + 1, ny + 1),
+                    //     (nx, ny + 1),
+                    //     (nx - 1, ny - 1),
+                    //     (nx - 1, ny),
+                    //     (nx - 1, ny + 1),
+                    // ];
 
                     for neighbor_idx in &neighbor_indices {
                         let (in_neighbor, out_neighbor) = unsafe {
@@ -170,9 +177,10 @@ fn hysteresis(
                                 out.unsafe_get_pixel(neighbor_idx.0, neighbor_idx.1),
                             )
                         };
-                        if in_neighbor[0] >= low_thresh && out_neighbor != pixel {
+                        if in_neighbor[0] >= low_thresh && out_neighbor[0] != pixel[0] {
                             unsafe {
                                 out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
+                                out.unsafe_put_pixel(neighbor_idx.2, neighbor_idx.3, pixel);
                             };
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }

@@ -11,7 +11,7 @@ extern crate wasm_bindgen;
 mod edge;
 mod utils;
 
-use image::{Pixel};
+use image::Pixel;
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
@@ -36,7 +36,7 @@ pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, hue: u32) -> Clamp
     }
 
     // create gray image from gray image buffer
-    edge::canny(&gray_image, &mut source_buffer, 100.0, 300.0, hue);
+    edge::canny(&gray_image, &mut source_buffer, 100.0, 200.0, hue);
 
     // clamp results for canvas
     Clamped(source_buffer.into_raw())
