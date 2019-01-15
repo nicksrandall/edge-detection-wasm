@@ -1,9 +1,6 @@
 #![feature(test)]
 extern crate test;
 
-#[macro_use]
-extern crate lazy_static;
-
 extern crate image;
 extern crate js_sys;
 extern crate wasm_bindgen;
@@ -11,17 +8,9 @@ extern crate wasm_bindgen;
 mod edge;
 mod utils;
 
-use image::{GrayImage, Pixel, RgbaImage};
-use std::sync::Mutex;
+use image::{GenericImageView, GrayImage, Pixel, RgbaImage};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
-
-static mut INITIALIZED: bool = false;
-
-lazy_static! {
-  // Since it's mutable and shared, use mutext.
-  static ref GRAY_IMAGE: Mutex<image::GrayImage> = Mutex::new(GrayImage::new(640, 480));
-}
 
 #[wasm_bindgen]
 pub fn detect(
@@ -31,11 +20,6 @@ pub fn detect(
     hue: u32,
     use_thick: bool,
 ) -> Clamped<Vec<u8>> {
-    unsafe {
-        if !INITIALIZED {
-            edge::initialize(width, height);
-        }
-    };
     let buf_vec = buf.0;
 
     // create image from image buffer
@@ -43,10 +27,9 @@ pub fn detect(
         .expect("Could not load image from input buffer");
 
     // convert image buffer to grayscale (luma) buffer;
-    let mut gray_image = GRAY_IMAGE.lock().unwrap();
-    for (x, y, p) in source_buffer.enumerate_pixels() {
-        gray_image.put_pixel(x, y, p.to_luma());
-    }
+    let gray_image = GrayImage::from_fn(width, height, |x, y| {
+        (unsafe { source_buffer.unsafe_get_pixel(x, y).to_luma() })
+    });
 
     // create gray image from gray image buffer
     edge::canny(

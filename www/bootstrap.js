@@ -34,8 +34,8 @@ videoEl.addEventListener(
 (async () => {
   await wasm_bindgen(wasmURL);
   const video = {
-    width: 640,
-    height: 480,
+    width: 480,
+    height: 640,
     facingMode: 'environment',
   };
 

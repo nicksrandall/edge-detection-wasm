@@ -4,7 +4,6 @@ use image::{GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma, Rgba};
 // use imageproc::filter::gaussian_blur_f32;
 use std::cmp::{max, min};
 use std::mem::transmute;
-use std::sync::Mutex;
 use std::{f32, i16};
 
 static BLACK_32: Luma<f32> = Luma { data: [0.0] };
@@ -14,23 +13,6 @@ static VERTICAL_SOBEL: [i32; 9] = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
 
 /// Sobel filter for detecting horizontal gradients.
 static HORIZONTAL_SOBEL: [i32; 9] = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
-
-static mut WIDTH: u32 = 640;
-static mut HEIGHT: u32 = 480;
-
-lazy_static! {
-    // Since it's mutable and shared, use mutext.
-    static ref VERT:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
-    static ref HORIZ:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
-    static ref IN_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
-    static ref OUT_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
-    static ref EDGES: Mutex<Vec<(u32, u32)>> = unsafe { Mutex::new(Vec::with_capacity((WIDTH as usize * HEIGHT as usize) / 2)) };
-}
-
-pub unsafe fn initialize(width: u32, height: u32) {
-    WIDTH = width;
-    HEIGHT = height;
-}
 
 /// Runs the canny edge detection algorithm.
 ///
@@ -57,10 +39,11 @@ pub fn canny(
     hue: u32,
     use_thick: bool,
 ) {
-    let mut gx = HORIZ.lock().unwrap();
-    let mut gy = VERT.lock().unwrap();
-    let mut out = OUT_IMAGE.lock().unwrap();
-    let mut in_image = IN_IMAGE.lock().unwrap();
+    let (width, height) = image.dimensions();
+    let mut gx = ImageBuffer::new(width, height);
+    let mut gy = ImageBuffer::new(width, height);
+    let mut out = ImageBuffer::new(width, height);
+    let mut in_image = ImageBuffer::new(width, height);
 
     // Heavily based on the implementation proposed by wikipedia.
     // 1. Gaussian blur.(we don't do this step to boost speed).
@@ -148,8 +131,8 @@ fn hysteresis(
     let high_thresh = high_thresh * high_thresh;
     let pixel = image::Rgba { data: color };
     // Init output image as all black.
-    let mut edges = EDGES.lock().unwrap();
-    edges.clear();
+    let (width, height) = input.dimensions();
+    let mut edges = Vec::with_capacity((width as usize * height as usize) / 2);
 
     for y in 1..input.height() - 1 {
         for x in 1..input.width() - 1 {
