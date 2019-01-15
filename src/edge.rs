@@ -15,13 +15,21 @@ static VERTICAL_SOBEL: [i32; 9] = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
 /// Sobel filter for detecting horizontal gradients.
 static HORIZONTAL_SOBEL: [i32; 9] = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
 
+static mut WIDTH: u32 = 640;
+static mut HEIGHT: u32 = 480;
+
 lazy_static! {
     // Since it's mutable and shared, use mutext.
-    static ref VERT:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
-    static ref HORIZ:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = Mutex::new(ImageBuffer::new(640, 480));
-    static ref IN_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
-    static ref OUT_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = Mutex::new(ImageBuffer::new(640, 480));
-    static ref EDGES: Mutex<Vec<(u32, u32)>> = Mutex::new(Vec::with_capacity((640 * 480) / 2));
+    static ref VERT:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
+    static ref HORIZ:  Mutex<ImageBuffer<Luma<i16>, Vec<i16>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
+    static ref IN_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
+    static ref OUT_IMAGE: Mutex<ImageBuffer<Luma<f32>, Vec<f32>>> = unsafe { Mutex::new(ImageBuffer::new(WIDTH, HEIGHT)) };
+    static ref EDGES: Mutex<Vec<(u32, u32)>> = unsafe { Mutex::new(Vec::with_capacity((WIDTH as usize * HEIGHT as usize) / 2)) };
+}
+
+pub unsafe fn initialize(width: u32, height: u32) {
+    WIDTH = width;
+    HEIGHT = height;
 }
 
 /// Runs the canny edge detection algorithm.

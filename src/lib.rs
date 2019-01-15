@@ -16,6 +16,8 @@ use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 
+static mut INITIALIZED: bool = false;
+
 lazy_static! {
   // Since it's mutable and shared, use mutext.
   static ref GRAY_IMAGE: Mutex<image::GrayImage> = Mutex::new(GrayImage::new(640, 480));
@@ -29,6 +31,11 @@ pub fn detect(
     hue: u32,
     use_thick: bool,
 ) -> Clamped<Vec<u8>> {
+    unsafe {
+        if !INITIALIZED {
+            edge::initialize(width, height);
+        }
+    };
     let buf_vec = buf.0;
 
     // create image from image buffer
