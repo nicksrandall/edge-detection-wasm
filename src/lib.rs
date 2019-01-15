@@ -11,22 +11,28 @@ extern crate wasm_bindgen;
 mod edge;
 mod utils;
 
-use image::Pixel;
+use image::{GrayImage, Pixel, RgbaImage};
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 
 lazy_static! {
   // Since it's mutable and shared, use mutext.
-  static ref GRAY_IMAGE: Mutex<image::GrayImage> = Mutex::new(image::GrayImage::new(640, 480));
+  static ref GRAY_IMAGE: Mutex<image::GrayImage> = Mutex::new(GrayImage::new(640, 480));
 }
 
 #[wasm_bindgen]
-pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, hue: u32) -> Clamped<Vec<u8>> {
+pub fn detect(
+    buf: Clamped<Vec<u8>>,
+    width: u32,
+    height: u32,
+    hue: u32,
+    use_thick: bool,
+) -> Clamped<Vec<u8>> {
     let buf_vec = buf.0;
 
     // create image from image buffer
-    let mut source_buffer = image::RgbaImage::from_vec(width, height, buf_vec)
+    let mut source_buffer = RgbaImage::from_vec(width, height, buf_vec)
         .expect("Could not load image from input buffer");
 
     // convert image buffer to grayscale (luma) buffer;
@@ -36,7 +42,14 @@ pub fn detect(buf: Clamped<Vec<u8>>, width: u32, height: u32, hue: u32) -> Clamp
     }
 
     // create gray image from gray image buffer
-    edge::canny(&gray_image, &mut source_buffer, 100.0, 200.0, hue);
+    edge::canny(
+        &gray_image,
+        &mut source_buffer,
+        150.0,
+        300.0,
+        hue,
+        use_thick,
+    );
 
     // clamp results for canvas
     Clamped(source_buffer.into_raw())

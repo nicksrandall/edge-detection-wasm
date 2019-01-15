@@ -47,6 +47,7 @@ pub fn canny(
     low_threshold: f32,
     high_threshold: f32,
     hue: u32,
+    use_thick: bool,
 ) {
     let mut gx = HORIZ.lock().unwrap();
     let mut gy = VERT.lock().unwrap();
@@ -59,18 +60,20 @@ pub fn canny(
     // let blurred = gaussian_blur_f32(image, SIGMA);
 
     // 2. Intensity of gradients.
-    filter(&image, HORIZONTAL_SOBEL, VERTICAL_SOBEL, &mut gx, &mut gy);
-
-    // collect bolth
-    for ((h, v), p) in gx.iter().zip(gy.iter()).zip(in_image.iter_mut()) {
-        *p = (*h as f32) * (*h as f32) + (*v as f32) * (*v as f32)
-    }
+    filter(
+        &image,
+        HORIZONTAL_SOBEL,
+        VERTICAL_SOBEL,
+        &mut gx,
+        &mut gy,
+        &mut in_image,
+    );
 
     // 3. Non-maximum-suppression (Make edges thinner)
     non_maximum_suppression(&in_image, &gx, &gy, &mut out);
 
     // 4. Hysteresis to filter out edges based on thresholds.
-    hysteresis(&out, src_buf, low_threshold, high_threshold, hue);
+    hysteresis(&out, src_buf, low_threshold, high_threshold, hue, use_thick);
 }
 
 /// Finds local maxima to make the edges thinner.
@@ -130,6 +133,7 @@ fn hysteresis(
     low_thresh: f32,
     high_thresh: f32,
     hue: u32,
+    use_thick: bool,
 ) {
     let color: [u8; 4] = unsafe { transmute(hue.to_be()) };
     let low_thresh = low_thresh * low_thresh;
@@ -154,12 +158,12 @@ fn hysteresis(
                 while !edges.is_empty() {
                     let (nx, ny) = edges.pop().unwrap();
                     let neighbor_indices = [
-                        (nx + 1, ny, nx - 1, ny + 1),
-                        (nx + 1, ny + 1, nx + 1, ny),
-                        (nx, ny + 1, nx + 1, ny + 1),
-                        (nx - 1, ny - 1, nx, ny + 1),
-                        (nx - 1, ny, nx - 1, ny - 1),
-                        (nx - 1, ny + 1, nx - 1, ny),
+                        (nx + 1, ny, nx - 1, ny),
+                        (nx + 1, ny + 1, nx - 1, ny + 1),
+                        (nx, ny + 1, nx + 1, ny),
+                        (nx - 1, ny - 1, nx + 1, ny + 1),
+                        (nx - 1, ny, nx, ny + 1),
+                        (nx - 1, ny + 1, nx - 1, ny - 1),
                     ];
                     // let neighbor_indices = [
                     //     (nx + 1, ny),
@@ -180,7 +184,9 @@ fn hysteresis(
                         if in_neighbor[0] >= low_thresh && out_neighbor[0] != pixel[0] {
                             unsafe {
                                 out.unsafe_put_pixel(neighbor_idx.0, neighbor_idx.1, pixel);
-                                out.unsafe_put_pixel(neighbor_idx.2, neighbor_idx.3, pixel);
+                                if use_thick {
+                                    out.unsafe_put_pixel(neighbor_idx.2, neighbor_idx.3, pixel);
+                                }
                             };
                             edges.push((neighbor_idx.0, neighbor_idx.1));
                         }
@@ -197,6 +203,7 @@ pub fn filter(
     vdata: [i32; 9],
     hout: &mut ImageBuffer<Luma<i16>, Vec<i16>>,
     vout: &mut ImageBuffer<Luma<i16>, Vec<i16>>,
+    out: &mut ImageBuffer<Luma<f32>, Vec<f32>>,
 ) {
     let (width, height) = image.dimensions();
     let (k_width, k_height) = (3, 3);
@@ -225,10 +232,17 @@ pub fn filter(
                     vacc = accumulate(vacc, &p, *vk);
                 }
             }
-            hout.get_pixel_mut(x, y)[0] = clamp(hacc);
-            vout.get_pixel_mut(x, y)[0] = clamp(vacc);
+
+            let h = clamp(hacc);
+            let v = clamp(vacc);
+            let p = (h as f32) * (h as f32) + (v as f32) * (v as f32);
             hacc = 0_i32;
             vacc = 0_i32;
+            unsafe {
+                hout.unsafe_put_pixel(x, y, Luma { data: [h] });
+                vout.unsafe_put_pixel(x, y, Luma { data: [v] });
+                out.unsafe_put_pixel(x, y, Luma { data: [p] });
+            };
         }
     }
 }
