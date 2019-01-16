@@ -14,16 +14,14 @@ use wasm_bindgen::Clamped;
 
 #[wasm_bindgen]
 pub fn detect(
-    buf: Clamped<Vec<u8>>,
+    buf_vec: Vec<u8>,
     width: u32,
     height: u32,
     hue: u32,
     use_thick: bool,
 ) -> Clamped<Vec<u8>> {
-    let buf_vec = buf.0;
-
     // create image from image buffer
-    let mut source_buffer = RgbaImage::from_vec(width, height, buf_vec)
+    let mut source_buffer = RgbaImage::from_raw(width, height, buf_vec)
         .expect("Could not load image from input buffer");
 
     // convert image buffer to grayscale (luma) buffer;
