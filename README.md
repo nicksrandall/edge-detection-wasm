@@ -6,7 +6,7 @@ The exported function (`detect`) takes in a pixel buffer in the form of a `Clamp
 and outputs a new pixel buffer that has all the detected "edges" in that image highlighted 
 with a given color
 
-> Alot of this code is copy pasted from `https://github.com/PistonDevelopers/imageproc`
+> Alot of this code was inspired by `https://github.com/PistonDevelopers/imageproc`
 
 ## 🚴 Usage
 
@@ -42,9 +42,9 @@ wasm-pack publish
 ```
 
 ## 🏎 Speed
-On my newish MBP, the `detect` function completes in about 29ms. I'd like to get it under 20ms.
+On my newish MBP, the `detect` function completes in about 25ms. I'd like to get it under 20ms.
 
 ## Size
-- JavaScript < 700b (gzip)
-- Wasm ~ 18kb (gzip)
+- JavaScript ~ 987b (gzip)
+- Wasm ~ 11kb (gzip)
 
