@@ -1,67 +1,6 @@
 /******/ (function(modules) { // webpackBootstrap
-/******/ 	// install a JSONP callback for chunk loading
-/******/ 	function webpackJsonpCallback(data) {
-/******/ 		var chunkIds = data[0];
-/******/ 		var moreModules = data[1];
-/******/
-/******/
-/******/ 		// add "moreModules" to the modules object,
-/******/ 		// then flag all "chunkIds" as loaded and fire callback
-/******/ 		var moduleId, chunkId, i = 0, resolves = [];
-/******/ 		for(;i < chunkIds.length; i++) {
-/******/ 			chunkId = chunkIds[i];
-/******/ 			if(installedChunks[chunkId]) {
-/******/ 				resolves.push(installedChunks[chunkId][0]);
-/******/ 			}
-/******/ 			installedChunks[chunkId] = 0;
-/******/ 		}
-/******/ 		for(moduleId in moreModules) {
-/******/ 			if(Object.prototype.hasOwnProperty.call(moreModules, moduleId)) {
-/******/ 				modules[moduleId] = moreModules[moduleId];
-/******/ 			}
-/******/ 		}
-/******/ 		if(parentJsonpFunction) parentJsonpFunction(data);
-/******/
-/******/ 		while(resolves.length) {
-/******/ 			resolves.shift()();
-/******/ 		}
-/******/
-/******/ 	};
-/******/
-/******/
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
-/******/
-/******/ 	// object to store loaded and loading chunks
-/******/ 	// undefined = chunk not loaded, null = chunk preloaded/prefetched
-/******/ 	// Promise = chunk loading, 0 = chunk loaded
-/******/ 	var installedChunks = {
-/******/ 		"main": 0
-/******/ 	};
-/******/
-/******/
-/******/
-/******/ 	// script path function
-/******/ 	function jsonpScriptSrc(chunkId) {
-/******/ 		return __webpack_require__.p + "" + chunkId + ".bootstrap.js"
-/******/ 	}
-/******/
-/******/ 	// object to store loaded and loading wasm modules
-/******/ 	var installedWasmModules = {};
-/******/
-/******/ 	function promiseResolve() { return Promise.resolve(); }
-/******/
-/******/ 	var wasmImportObjects = {
-/******/ 		"../pkg/edge_detection_wasm_bg.wasm": function() {
-/******/ 			return {
-/******/ 				"./edge_detection_wasm": {
-/******/ 					"__wbindgen_throw": function(p0i32,p1i32) {
-/******/ 						return installedModules["../pkg/edge_detection_wasm.js"].exports["__wbindgen_throw"](p0i32,p1i32);
-/******/ 					}
-/******/ 				}
-/******/ 			};
-/******/ 		},
-/******/ 	};
 /******/
 /******/ 	// The require function
 /******/ 	function __webpack_require__(moduleId) {
@@ -87,96 +26,6 @@
 /******/ 		return module.exports;
 /******/ 	}
 /******/
-/******/ 	// This file contains only the entry chunk.
-/******/ 	// The chunk loading function for additional chunks
-/******/ 	__webpack_require__.e = function requireEnsure(chunkId) {
-/******/ 		var promises = [];
-/******/
-/******/
-/******/ 		// JSONP chunk loading for javascript
-/******/
-/******/ 		var installedChunkData = installedChunks[chunkId];
-/******/ 		if(installedChunkData !== 0) { // 0 means "already installed".
-/******/
-/******/ 			// a Promise means "currently loading".
-/******/ 			if(installedChunkData) {
-/******/ 				promises.push(installedChunkData[2]);
-/******/ 			} else {
-/******/ 				// setup Promise in chunk cache
-/******/ 				var promise = new Promise(function(resolve, reject) {
-/******/ 					installedChunkData = installedChunks[chunkId] = [resolve, reject];
-/******/ 				});
-/******/ 				promises.push(installedChunkData[2] = promise);
-/******/
-/******/ 				// start chunk loading
-/******/ 				var script = document.createElement('script');
-/******/ 				var onScriptComplete;
-/******/
-/******/ 				script.charset = 'utf-8';
-/******/ 				script.timeout = 120;
-/******/ 				if (__webpack_require__.nc) {
-/******/ 					script.setAttribute("nonce", __webpack_require__.nc);
-/******/ 				}
-/******/ 				script.src = jsonpScriptSrc(chunkId);
-/******/
-/******/ 				onScriptComplete = function (event) {
-/******/ 					// avoid mem leaks in IE.
-/******/ 					script.onerror = script.onload = null;
-/******/ 					clearTimeout(timeout);
-/******/ 					var chunk = installedChunks[chunkId];
-/******/ 					if(chunk !== 0) {
-/******/ 						if(chunk) {
-/******/ 							var errorType = event && (event.type === 'load' ? 'missing' : event.type);
-/******/ 							var realSrc = event && event.target && event.target.src;
-/******/ 							var error = new Error('Loading chunk ' + chunkId + ' failed.\n(' + errorType + ': ' + realSrc + ')');
-/******/ 							error.type = errorType;
-/******/ 							error.request = realSrc;
-/******/ 							chunk[1](error);
-/******/ 						}
-/******/ 						installedChunks[chunkId] = undefined;
-/******/ 					}
-/******/ 				};
-/******/ 				var timeout = setTimeout(function(){
-/******/ 					onScriptComplete({ type: 'timeout', target: script });
-/******/ 				}, 120000);
-/******/ 				script.onerror = script.onload = onScriptComplete;
-/******/ 				document.head.appendChild(script);
-/******/ 			}
-/******/ 		}
-/******/
-/******/ 		// Fetch + compile chunk loading for webassembly
-/******/
-/******/ 		var wasmModules = {"0":["../pkg/edge_detection_wasm_bg.wasm"]}[chunkId] || [];
-/******/
-/******/ 		wasmModules.forEach(function(wasmModuleId) {
-/******/ 			var installedWasmModuleData = installedWasmModules[wasmModuleId];
-/******/
-/******/ 			// a Promise means "currently loading" or "already loaded".
-/******/ 			if(installedWasmModuleData)
-/******/ 				promises.push(installedWasmModuleData);
-/******/ 			else {
-/******/ 				var importObject = wasmImportObjects[wasmModuleId]();
-/******/ 				var req = fetch(__webpack_require__.p + "" + {"../pkg/edge_detection_wasm_bg.wasm":"e981c524374635454f74"}[wasmModuleId] + ".module.wasm");
-/******/ 				var promise;
-/******/ 				if(importObject instanceof Promise && typeof WebAssembly.compileStreaming === 'function') {
-/******/ 					promise = Promise.all([WebAssembly.compileStreaming(req), importObject]).then(function(items) {
-/******/ 						return WebAssembly.instantiate(items[0], items[1]);
-/******/ 					});
-/******/ 				} else if(typeof WebAssembly.instantiateStreaming === 'function') {
-/******/ 					promise = WebAssembly.instantiateStreaming(req, importObject);
-/******/ 				} else {
-/******/ 					var bytesPromise = req.then(function(x) { return x.arrayBuffer(); });
-/******/ 					promise = bytesPromise.then(function(bytes) {
-/******/ 						return WebAssembly.instantiate(bytes, importObject);
-/******/ 					});
-/******/ 				}
-/******/ 				promises.push(installedWasmModules[wasmModuleId] = promise.then(function(res) {
-/******/ 					return __webpack_require__.w[wasmModuleId] = (res.instance || res).exports;
-/******/ 				}));
-/******/ 			}
-/******/ 		});
-/******/ 		return Promise.all(promises);
-/******/ 	};
 /******/
 /******/ 	// expose the modules object (__webpack_modules__)
 /******/ 	__webpack_require__.m = modules;
@@ -230,19 +79,6 @@
 /******/ 	// __webpack_public_path__
 /******/ 	__webpack_require__.p = "";
 /******/
-/******/ 	// on error function for async loading
-/******/ 	__webpack_require__.oe = function(err) { console.error(err); throw err; };
-/******/
-/******/ 	// object with all WebAssembly.instance exports
-/******/ 	__webpack_require__.w = {};
-/******/
-/******/ 	var jsonpArray = self["webpackJsonp"] = self["webpackJsonp"] || [];
-/******/ 	var oldJsonpFunction = jsonpArray.push.bind(jsonpArray);
-/******/ 	jsonpArray.push = webpackJsonpCallback;
-/******/ 	jsonpArray = jsonpArray.slice();
-/******/ 	for(var i = 0; i < jsonpArray.length; i++) webpackJsonpCallback(jsonpArray[i]);
-/******/ 	var parentJsonpFunction = oldJsonpFunction;
-/******/
 /******/
 /******/ 	// Load entry module and return exports
 /******/ 	return __webpack_require__(__webpack_require__.s = "./bootstrap.js");
@@ -250,14 +86,37 @@
 /************************************************************************/
 /******/ ({
 
+/***/ "../pkg/edge_detection_wasm.js":
+/*!*************************************!*\
+  !*** ../pkg/edge_detection_wasm.js ***!
+  \*************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+eval("(function() {\n    var wasm;\n    const __exports = {};\n\n\n    let cachegetUint8Memory = null;\n    function getUint8Memory() {\n        if (cachegetUint8Memory === null || cachegetUint8Memory.buffer !== wasm.memory.buffer) {\n            cachegetUint8Memory = new Uint8Array(wasm.memory.buffer);\n        }\n        return cachegetUint8Memory;\n    }\n\n    let WASM_VECTOR_LEN = 0;\n\n    function passArray8ToWasm(arg) {\n        const ptr = wasm.__wbindgen_malloc(arg.length * 1);\n        getUint8Memory().set(arg, ptr / 1);\n        WASM_VECTOR_LEN = arg.length;\n        return ptr;\n    }\n\n    let cachegetUint8ClampedMemory = null;\n    function getUint8ClampedMemory() {\n        if (cachegetUint8ClampedMemory === null || cachegetUint8ClampedMemory.buffer !== wasm.memory.buffer) {\n            cachegetUint8ClampedMemory = new Uint8ClampedArray(wasm.memory.buffer);\n        }\n        return cachegetUint8ClampedMemory;\n    }\n\n    function getClampedArrayU8FromWasm(ptr, len) {\n        return getUint8ClampedMemory().subarray(ptr / 1, ptr / 1 + len);\n    }\n\n    let cachedGlobalArgumentPtr = null;\n    function globalArgumentPtr() {\n        if (cachedGlobalArgumentPtr === null) {\n            cachedGlobalArgumentPtr = wasm.__wbindgen_global_argument_ptr();\n        }\n        return cachedGlobalArgumentPtr;\n    }\n\n    let cachegetUint32Memory = null;\n    function getUint32Memory() {\n        if (cachegetUint32Memory === null || cachegetUint32Memory.buffer !== wasm.memory.buffer) {\n            cachegetUint32Memory = new Uint32Array(wasm.memory.buffer);\n        }\n        return cachegetUint32Memory;\n    }\n    /**\n    * @param {Uint8Array} arg0\n    * @param {number} arg1\n    * @param {number} arg2\n    * @param {number} arg3\n    * @param {boolean} arg4\n    * @returns {Uint8ClampedArray}\n    */\n    __exports.detect = function(arg0, arg1, arg2, arg3, arg4) {\n        const ptr0 = passArray8ToWasm(arg0);\n        const len0 = WASM_VECTOR_LEN;\n        const retptr = globalArgumentPtr();\n        wasm.detect(retptr, ptr0, len0, arg1, arg2, arg3, arg4);\n        const mem = getUint32Memory();\n        const rustptr = mem[retptr / 4];\n        const rustlen = mem[retptr / 4 + 1];\n\n        const realRet = getClampedArrayU8FromWasm(rustptr, rustlen).slice();\n        wasm.__wbindgen_free(rustptr, rustlen * 1);\n        return realRet;\n\n    };\n\n    let cachedTextDecoder = new TextDecoder('utf-8');\n\n    function getStringFromWasm(ptr, len) {\n        return cachedTextDecoder.decode(getUint8Memory().subarray(ptr, ptr + len));\n    }\n\n    __exports.__wbindgen_throw = function(ptr, len) {\n        throw new Error(getStringFromWasm(ptr, len));\n    };\n\n    function init(path_or_module) {\n        let instantiation;\n        const imports = { './edge_detection_wasm': __exports };\n        if (path_or_module instanceof WebAssembly.Module) {\n            instantiation = WebAssembly.instantiate(path_or_module, imports)\n            .then(instance => {\n            return { instance, module: path_or_module }\n        });\n    } else {\n        const data = fetch(path_or_module);\n        if (typeof WebAssembly.instantiateStreaming === 'function') {\n            instantiation = WebAssembly.instantiateStreaming(data, imports);\n        } else {\n            instantiation = data\n            .then(response => response.arrayBuffer())\n            .then(buffer => WebAssembly.instantiate(buffer, imports));\n        }\n    }\n    return instantiation.then(({instance}) => {\n        wasm = init.wasm = instance.exports;\n\n    });\n};\nself.wasm_bindgen = Object.assign(init, __exports);\n})();\n\n\n//# sourceURL=webpack:///../pkg/edge_detection_wasm.js?");
+
+/***/ }),
+
+/***/ "../pkg/edge_detection_wasm_bg.wasm":
+/*!******************************************!*\
+  !*** ../pkg/edge_detection_wasm_bg.wasm ***!
+  \******************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+eval("module.exports = __webpack_require__.p + \"edge_detection_wasm_bg.acccc.wasm\";\n\n//# sourceURL=webpack:///../pkg/edge_detection_wasm_bg.wasm?");
+
+/***/ }),
+
 /***/ "./bootstrap.js":
 /*!**********************!*\
   !*** ./bootstrap.js ***!
   \**********************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
+/*! no exports provided */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
 
-eval("__webpack_require__.e(/*! import() */ 0).then(__webpack_require__.bind(null, /*! ./index.js */ \"./index.js\")).catch(err => console.error('err:', err));\n\n\n//# sourceURL=webpack:///./bootstrap.js?");
+"use strict";
+eval("__webpack_require__.r(__webpack_exports__);\n/* harmony import */ var edge_detection_wasm__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! edge-detection-wasm */ \"../pkg/edge_detection_wasm.js\");\n/* harmony import */ var edge_detection_wasm__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(edge_detection_wasm__WEBPACK_IMPORTED_MODULE_0__);\n/* harmony import */ var edge_detection_wasm_edge_detection_wasm_bg_wasm__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! edge-detection-wasm/edge_detection_wasm_bg.wasm */ \"../pkg/edge_detection_wasm_bg.wasm\");\n/* harmony import */ var edge_detection_wasm_edge_detection_wasm_bg_wasm__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(edge_detection_wasm_edge_detection_wasm_bg_wasm__WEBPACK_IMPORTED_MODULE_1__);\n\n\n\nlet wasm;\nconst canvas = document.getElementById('canvas');\nconst videoEl = document.getElementById('video');\nconst ctx = canvas.getContext('2d');\n\nfunction tick() {\n  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);\n  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);\n  console.time('edge::detect');\n  const data = wasm_bindgen.detect(\n    imageData.data,\n    canvas.width,\n    canvas.height,\n    0xff9e24ff,\n    false,\n  );\n  console.timeEnd('edge::detect');\n  ctx.putImageData(new ImageData(data, canvas.width, canvas.height), 0, 0);\n  window.requestAnimationFrame(tick);\n}\n\nvideoEl.addEventListener(\n  'loadeddata',\n  () => {\n    console.log('video loaded');\n    window.requestAnimationFrame(tick);\n  },\n  false,\n);\n\n(async () => {\n  await wasm_bindgen(edge_detection_wasm_edge_detection_wasm_bg_wasm__WEBPACK_IMPORTED_MODULE_1___default.a);\n  const video = {\n    width: 480,\n    height: 640,\n    facingMode: 'environment',\n  };\n\n  videoEl.srcObject = await navigator.mediaDevices.getUserMedia({\n    audio: false,\n    video,\n  });\n})();\n\n\n//# sourceURL=webpack:///./bootstrap.js?");
 
 /***/ })
 
