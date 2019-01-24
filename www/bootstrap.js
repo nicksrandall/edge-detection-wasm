@@ -15,7 +15,7 @@ function tick() {
     canvas.width,
     canvas.height,
     0xff9e24ff,
-    true,
+    false,
   );
   console.timeEnd('edge::detect');
   ctx.putImageData(new ImageData(data, canvas.width, canvas.height), 0, 0);
