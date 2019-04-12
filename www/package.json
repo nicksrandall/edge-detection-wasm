@@ -14,7 +14,12 @@
     "type": "git",
     "url": "git+https://github.com/rustwasm/create-wasm-app.git"
   },
-  "keywords": ["webassembly", "wasm", "rust", "webpack"],
+  "keywords": [
+    "webassembly",
+    "wasm",
+    "rust",
+    "webpack"
+  ],
   "author": "Ashley Williams <ashley666ashley@gmail.com>",
   "license": "(MIT OR Apache-2.0)",
   "bugs": {
@@ -22,12 +27,12 @@
   },
   "homepage": "https://github.com/rustwasm/create-wasm-app#readme",
   "devDependencies": {
-    "copy-webpack-plugin": "^4.6.0",
+    "copy-webpack-plugin": "^5.0.2",
     "file-loader": "^3.0.1",
     "hello-wasm-pack": "^0.1.0",
-    "webpack": "^4.28.4",
-    "webpack-cli": "^3.2.1",
-    "webpack-dev-server": "^3.1.14",
+    "webpack": "^4.29.6",
+    "webpack-cli": "^3.3.0",
+    "webpack-dev-server": "^3.3.1",
     "worker-loader": "^2.0.0"
   }
 }
