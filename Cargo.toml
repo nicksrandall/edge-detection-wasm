@@ -19,7 +19,7 @@ default = ["console_error_panic_hook"]
 [dependencies]
 cfg-if = "0.1"
 wasm-bindgen = "0.2"
-image = "0.20"
+image = "0.21"
 js-sys = "0.3"
 imageproc = "0.17"
 
