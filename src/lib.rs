@@ -9,7 +9,7 @@ extern crate wasm_bindgen;
 mod edge;
 mod utils;
 
-use image::{GenericImageView, GrayImage, Pixel, RgbaImage};
+use image::{RgbaImage, DynamicImage};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 
@@ -26,9 +26,7 @@ pub fn detect(
         .expect("Could not load image from input buffer");
 
     // convert image buffer to grayscale (luma) buffer;
-    let gray_image = GrayImage::from_fn(width, height, |x, y| {
-        (unsafe { source_buffer.unsafe_get_pixel(x, y).to_luma() })
-    });
+    let gray_image = DynamicImage::ImageRgba8(source_buffer.clone()).into_luma();
 
     // create gray image from gray image buffer
     edge::canny(
@@ -59,7 +57,7 @@ mod tests {
         let width = img.width();
         let height = img.height();
         let raw = Clamped(img.to_rgba().into_raw());
-        let out = detect(raw, width, height, ORANGE);
+        let out = detect(raw, width, height, ORANGE, false);
         let out_buf = image::RgbaImage::from_vec(width, height, out.to_vec())
             .expect("Could not load image from buf");
 

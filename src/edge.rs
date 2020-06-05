@@ -6,7 +6,7 @@ use std::cmp::{max, min};
 use std::mem::transmute;
 use std::{f32, i16};
 
-static BLACK_32: Luma<f32> = Luma { data: [0.0] };
+static BLACK_32: Luma<f32> = Luma([0.0]);
 
 /// Sobel filter for detecting vertical gradients.
 static VERTICAL_SOBEL: [i32; 9] = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
@@ -129,7 +129,7 @@ fn hysteresis(
     let color: [u8; 4] = unsafe { transmute(hue.to_be()) };
     let low_thresh = low_thresh * low_thresh;
     let high_thresh = high_thresh * high_thresh;
-    let pixel = image::Rgba { data: color };
+    let pixel = image::Rgba(color);
     // Init output image as all black.
     let (width, height) = input.dimensions();
     let mut edges = Vec::with_capacity((width as usize * height as usize) / 2);
@@ -230,9 +230,9 @@ pub fn filter(
             hacc = 0_i32;
             vacc = 0_i32;
             unsafe {
-                hout.unsafe_put_pixel(x, y, Luma { data: [h] });
-                vout.unsafe_put_pixel(x, y, Luma { data: [v] });
-                out.unsafe_put_pixel(x, y, Luma { data: [p] });
+                hout.unsafe_put_pixel(x, y, Luma([h]));
+                vout.unsafe_put_pixel(x, y, Luma([v]));
+                out.unsafe_put_pixel(x, y, Luma([p]));
             };
         }
     }
@@ -251,7 +251,7 @@ fn clamp(x: i32) -> i16 {
 }
 
 fn accumulate(acc: i32, pixel: &Luma<u8>, weight: i32) -> i32 {
-    acc + (pixel.data[0] as i32) * weight
+    acc + ((pixel.0)[0] as i32) * weight
 }
 
 // borrowed this code from: https://gist.github.com/volkansalma/2972237
